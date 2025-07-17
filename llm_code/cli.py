@@ -150,25 +150,20 @@ def main(provider: Optional[str] = None):
     ))
     
     chat = LLMChat()
-    
-    # Switch provider if specified
+
     if provider:
         chat.switch_provider(provider)
     
     console.print(f"[green]Using {chat.current_provider} provider[/green]")
     console.print("[dim]Type your message or /help for commands[/dim]\n")
-    
-    # Create custom file completer
-    file_completer = FileCompleter(chat.file_handler)
 
-    # Custom key bindings for prompt_toolkit
+    file_completer = FileCompleter(chat.file_handler)
     kb = KeyBindings()
 
     @kb.add('enter')
     def _(event):
         buff = event.app.current_buffer
         if buff.complete_state:
-            # Accept the current completion, do NOT submit
             completion = buff.complete_state.current_completion
             if completion:
                 buff.apply_completion(completion)
@@ -189,7 +184,6 @@ def main(provider: Optional[str] = None):
             if not user_input.strip():
                 continue
             
-            # Handle commands
             if user_input.startswith("/"):
                 command_parts = user_input.split()
                 command = command_parts[0].lower()
@@ -214,10 +208,8 @@ def main(provider: Optional[str] = None):
                     console.print(f"[red]Unknown command: {command}[/red]")
                 continue
             
-            # Process message
             response = chat.process_message(user_input)
             
-            # Display response
             console.print("\n[bold]Assistant:[/bold]")
             console.print(Markdown(response))
             console.print()
