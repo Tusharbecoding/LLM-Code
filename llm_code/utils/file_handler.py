@@ -22,6 +22,7 @@ IGNORE_DIRS = {
 class FileHandler:
     def __init__(self, base_path: str = "."):
         self.base_path = Path(base_path).resolve()
+        self.SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
 
     def read_file(self, filepath: str) -> Tuple[str, str]:
         try:
@@ -92,3 +93,15 @@ class FileHandler:
             return contents
         else:
             return self.read_directory()
+
+    def list_supported_files(self):
+        files = []
+        for item in self.base_path.rglob("*"):
+            if item.is_file():
+                # Skip files in ignored directories
+                if any(ignored in item.parts for ignored in IGNORE_DIRS):
+                    continue
+                relative = item.relative_to(self.base_path)
+                if item.suffix.lower() in self.SUPPORTED_EXTENSIONS or item.name in self.SUPPORTED_EXTENSIONS:
+                    files.append(str(relative))
+        return sorted(files)

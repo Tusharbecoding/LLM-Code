@@ -4,9 +4,12 @@ from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.panel import Panel
 from prompt_toolkit import prompt
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import Completer, Completion
 from typing import Optional, List, Dict
 import os
+from pathlib import Path
+from prompt_toolkit.key_binding import KeyBindings
+
 
 from .config import Config
 from .providers import get_provider
@@ -14,13 +17,30 @@ from .utils import FileHandler
 
 console = Console()
 
+class FileCompleter(Completer):
+    def __init__(self, file_handler):
+        self.file_handler = file_handler
+        self._file_list = self.file_handler.list_supported_files()
+
+    def get_completions(self, document, complete_event):
+        text_before_cursor = document.text_before_cursor
+        if '@' not in text_before_cursor:
+            return
+        last_at = text_before_cursor.rfind('@')
+        if last_at == -1:
+            return
+        partial = text_before_cursor[last_at + 1:].strip().lower()
+        for file_path in self._file_list:
+            if partial in file_path.lower():
+                yield Completion(file_path, start_position=-len(partial), display=file_path)
+
 class LLMChat: 
     def __init__(self):
         self.config = Config()
-        self.file_hanlder = FileHandler()
+        self.file_handler = FileHandler()
         self.current_provider = self.config.default_provider
         self.provider = None
-        self.conversation_history = List[Dict[str, str]] = []
+        self.conversation_history: List[Dict[str, str]] = []
 
         self._init_provider(self.current_provider)
 
@@ -44,12 +64,16 @@ class LLMChat:
             self.conversation_history = []
 
     def process_message(self, user_input: str) -> str:
+        if not self.provider:
+            console.print(f"[red]Error: No provider initialized. Please check your API keys.[/red]")
+            return "Error: No provider available. Please configure your API keys."
+            
         files, cleaned_message = self.file_handler.parse_file_references(user_input)
         context_parts = []
 
         if files:
             console.print(f"[blue]Loading files: {', '.join(files)}[/blue]")
-            file_contents = self.file_hanlder.get_files_content(files)
+            file_contents = self.file_handler.get_files_content(files)
             for content, filename in file_contents:
                 if not content.startswith("Error:"):
                     context_parts.append(self.provider.format_context_message(content, filename))
@@ -119,7 +143,7 @@ class LLMChat:
 def main(provider: Optional[str] = None):
     """Multi-provider LLM CLI tool"""
     console.print(Panel.fit(
-        "[bold blue]LLM CLI[/bold blue]\n"
+        "[bold blue]LLM CODE[/bold blue]\n"
         "Chat with multiple LLM providers\n"
         "Type /help for commands",
         border_style="blue"
@@ -134,16 +158,33 @@ def main(provider: Optional[str] = None):
     console.print(f"[green]Using {chat.current_provider} provider[/green]")
     console.print("[dim]Type your message or /help for commands[/dim]\n")
     
-    # Create completer for file paths
-    file_completer = WordCompleter(
-        [f"@{f}" for f in os.listdir(".") if os.path.isfile(f)],
-        ignore_case=True
-    )
-    
+    # Create custom file completer
+    file_completer = FileCompleter(chat.file_handler)
+
+    # Custom key bindings for prompt_toolkit
+    kb = KeyBindings()
+
+    @kb.add('enter')
+    def _(event):
+        buff = event.app.current_buffer
+        if buff.complete_state:
+            # Accept the current completion, do NOT submit
+            completion = buff.complete_state.current_completion
+            if completion:
+                buff.apply_completion(completion)
+            return
+        else:
+            buff.validate_and_handle()
+
     while True:
         try:
-            # Get user input
-            user_input = prompt("You: ", completer=file_completer)
+            user_input = prompt(
+                "You: ",
+                completer=file_completer,
+                key_bindings=kb,
+                complete_in_thread=True,
+                complete_while_typing=True
+            )
             
             if not user_input.strip():
                 continue

@@ -12,6 +12,7 @@ class ProviderConfig:
 
 class Config:
     def __init__(self):
+        self.default_provider = "gemini"
         self.providers: Dict[str, ProviderConfig] = {
             "anthropic": ProviderConfig(
                 api_key = os.getenv("ANTHROPIC_API_KEY", ""),
@@ -21,7 +22,7 @@ class Config:
                 api_key = os.getenv("OPENAI_API_KEY", ""),
                 model = os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             ),
-            "google": ProviderConfig(
+            "gemini": ProviderConfig(
                 api_key = os.getenv("GEMINI_API_KEY", ""),
                 model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
             ),
